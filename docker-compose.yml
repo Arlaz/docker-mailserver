@@ -1,15 +1,19 @@
+version: "3.9"
+
 services:
   mailserver:
     image: docker.io/mailserver/docker-mailserver:latest
-    container_name: mailserver
+    container_name: mail
     # If the FQDN for your mail-server is only two labels (eg: example.com),
     # you can assign this entirely to `hostname` and remove `domainname`.
     hostname: mail
-    domainname: example.com
+    domainname: korog.lu
     env_file: mailserver.env
     # More information about the mail-server ports:
     # https://docker-mailserver.github.io/docker-mailserver/edge/config/security/understanding-the-ports/
     # To avoid conflicts with yaml base-60 float, DO NOT remove the quotation marks.
+    networks:
+      - network1
     ports:
       - "25:25"    # SMTP  (explicit TLS => STARTTLS)
       - "143:143"  # IMAP4 (explicit TLS => STARTTLS)
@@ -17,16 +21,61 @@ services:
       - "587:587"  # ESMTP (explicit TLS => STARTTLS)
       - "993:993"  # IMAP4 (implicit TLS)
     volumes:
-      - ./docker-data/dms/mail-data/:/var/mail/
-      - ./docker-data/dms/mail-state/:/var/mail-state/
-      - ./docker-data/dms/mail-logs/:/var/log/mail/
-      - ./docker-data/dms/config/:/tmp/docker-mailserver/
+      - /mnt/mail-storage/mail-data/:/var/mail/
+      - /mnt/mail-storage/mail-state/:/var/mail-state/
+      - /mnt/mail-storage/mail-logs/:/var/log/mail/
+      - /mnt/mail-storage/config/:/tmp/docker-mailserver/
+      - /mnt/mail-storage/config/dovecot/fts-xapian-plugin.conf:/etc/dovecot/conf.d/10-plugin.conf:ro
+      - /mnt/mail-storage/cron/fts_xapian:/etc/cron.d/fts_xapian
+      - /root/ssl/:/tmp/dms/custom-certs/:ro
       - /etc/localtime:/etc/localtime:ro
     restart: always
     stop_grace_period: 1m
     cap_add:
       - NET_ADMIN
+      - SYS_MODULE
+      - SYS_PTRACE
     healthcheck:
       test: "ss --listening --tcp | grep -P 'LISTEN.+:smtp' || exit 1"
       timeout: 3s
       retries: 0
+    environment:
+      - LOG_LEVEL=error
+      # Using letsencrypt for SSL/TLS certificates
+      - SSL_TYPE=manual
+      # Values should match the file paths inside the container:
+      - SSL_CERT_PATH=/tmp/dms/custom-certs/certs/ecdsa/korog.lu.ecdsa.full.chained.pem
+      - SSL_KEY_PATH=/tmp/dms/custom-certs/private/ecdsa/korog.lu.ecdsa.privkey.pem
+      - SSL_ALT_CERT_PATH=/tmp/dms/custom-certs/certs/rsa/korog.lu.rsa.full.chained.pem
+      - SSL_ALT_KEY_PATH=/tmp/dms/custom-certs/private/rsa/korog.lu.rsa.privkey.pem
+      # Allow sending emails from other docker containers
+      # All env below are default settings:
+      - ONE_DIR=1
+      - ENABLE_POSTGREY=1
+      - ENABLE_AMAVIS=1
+      - ENABLE_CLAMAV=1
+      - ENABLE_FAIL2BAN=1
+      - ENABLE_DNSBL=1
+      - ENABLE_SPAMASSASSIN=1
+      - ENABLE_SPAMASSASSIN_KAM=1
+      - SPAMASSASSIN_SPAM_TO_INBOX=1
+      - MOVE_SPAM_TO_JUNK=1
+      # You may want to enable this: https://docker-mailserver.github.io/docker-mailserver/edge/config/environment/#spoof_protection
+      # See step 8 below, which demonstrates setup with enabled/disabled SPOOF_PROTECTION:
+      - SPOOF_PROTECTION=1
+      - TZ=Europe/Paris
+      - POSTFIX_MESSAGE_SIZE_LIMIT=102400000
+      - POSTMASTER_ADDRESS=postmaster@korog.lu
+      - DOVECOT_MAILBOX_FORMAT=mdbox
+      - POSTFIX_INET_PROTOCOLS = all
+      - DOVECOT_INET_PROTOCOLS = all
+
+networks:
+  network1:
+    name: network1
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 2001:bc8:1830:1::/64
+          gateway: 2001:bc8:1830:1::1
+          
