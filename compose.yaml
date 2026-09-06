@@ -20,7 +20,7 @@ services:
       - /mnt/mail-storage/mail-state/:/var/mail-state/
       - /mnt/mail-storage/mail-logs/:/var/log/mail/
       - /mnt/mail-storage/config/:/tmp/docker-mailserver/
-      - /mnt/mail-storage/config/dovecot/fts-xapian-plugin.conf:/etc/dovecot/conf.d/10-plugin.conf:ro
+      - ./local-config/dovecot/fts-xapian-plugin.conf:/etc/dovecot/conf.d/90-fts-xapian.conf:ro
       - /mnt/mail-storage/cron/fts_xapian:/etc/cron.d/fts_xapian
       - /mnt/certbot/certs/:/etc/letsencrypt/:ro
       - /etc/localtime:/etc/localtime:ro
